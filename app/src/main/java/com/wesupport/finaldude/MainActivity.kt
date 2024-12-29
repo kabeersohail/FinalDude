@@ -1,4 +1,3 @@
-// MainActivity.kt
 package com.wesupport.finaldude
 
 import android.app.AppOpsManager
@@ -6,7 +5,6 @@ import android.app.usage.UsageStats
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -22,8 +20,8 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class MainActivity : AppCompatActivity() {
-    private val screenTimeData = mutableListOf<AppScreenTime>()
-    private val adapter = ScreenTimeAdapter(screenTimeData)
+    private val screenTimeGroups = mutableListOf<AppScreenTimeGroup>()
+    private val adapter = ScreenTimeAdapter(screenTimeGroups)
     private val calendar = Calendar.getInstance().apply {
         timeZone = TimeZone.getDefault()
     }
@@ -109,9 +107,9 @@ class MainActivity : AppCompatActivity() {
         tvSelectedDate.text = dateFormatter.format(calendar.time)
     }
 
-    private data class TimeRange(val startTime: Long, val endTime: Long)
+    private data class TimeRangeInternal(val startTime: Long, val endTime: Long)
 
-    private fun calculateTimeRange(): TimeRange {
+    private fun calculateTimeRange(): TimeRangeInternal {
         val startTime = calendar.clone() as Calendar
         startTime.apply {
             set(Calendar.HOUR_OF_DAY, 0)
@@ -131,7 +129,7 @@ class MainActivity : AppCompatActivity() {
             }.timeInMillis
         }
 
-        return TimeRange(startTime.timeInMillis, endTime)
+        return TimeRangeInternal(startTime.timeInMillis, endTime)
     }
 
     private fun isToday(): Boolean {
@@ -140,17 +138,17 @@ class MainActivity : AppCompatActivity() {
                 calendar.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)
     }
 
-    private fun logTimeRange(timeRange: TimeRange) {
+    private fun logTimeRange(timeRange: TimeRangeInternal) {
         val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
         println("Requested Time Range:")
         println("Start: ${formatter.format(Date(timeRange.startTime))}")
         println("End: ${formatter.format(Date(timeRange.endTime))}")
     }
 
-    private fun updateUsageStats(timeRange: TimeRange) {
+    private fun updateUsageStats(timeRange: TimeRangeInternal) {
         val usageStats = getUsageStats(this, timeRange.startTime, timeRange.endTime)
-        screenTimeData.clear()
-        screenTimeData.addAll(formatUsageStats(usageStats))
+        screenTimeGroups.clear()
+        screenTimeGroups.addAll(formatUsageStats(usageStats))
         adapter.notifyDataSetChanged()
     }
 
@@ -180,14 +178,29 @@ class MainActivity : AppCompatActivity() {
             }
     }
 
-    private fun formatUsageStats(usageStats: List<UsageStats>): List<AppScreenTime> {
-        return usageStats
-            .distinctBy { it.packageName }
-            .mapNotNull { stats -> createAppScreenTime(stats) }
-            .sortedByDescending { it.totalTimeInMillis }
+    private fun formatUsageStats(usageStats: List<UsageStats>): List<AppScreenTimeGroup> {
+        // First, get distinct time ranges
+        val timeRanges = usageStats
+            .map { stats ->
+                TimeRange(stats.firstTimeStamp, stats.lastTimeStamp)
+            }
+            .distinct()
+
+        // Group apps by time ranges
+        return timeRanges.map { timeRange ->
+            val appsInRange = usageStats
+                .filter { stats ->
+                    TimeRange(stats.firstTimeStamp, stats.lastTimeStamp) == timeRange
+                }
+                .distinctBy { it.packageName }
+                .mapNotNull { stats -> createAppScreenTime(stats, timeRange) }
+                .sortedByDescending { it.totalTimeInMillis }
+
+            AppScreenTimeGroup(timeRange, appsInRange)
+        }
     }
 
-    private fun createAppScreenTime(stats: UsageStats): AppScreenTime? {
+    private fun createAppScreenTime(stats: UsageStats, timeRange: TimeRange): AppScreenTime? {
         return try {
             val appInfo = packageManager.getApplicationInfo(stats.packageName, 0)
             val appName = packageManager.getApplicationLabel(appInfo).toString()
@@ -198,35 +211,16 @@ class MainActivity : AppCompatActivity() {
                 stats.totalTimeInForeground
             }
 
-            // Log detailed usage information
-            logAppUsageDetails(stats, appName, totalTimeInMillis)
-
             AppScreenTime(
                 appName = appName,
                 screenTime = formatDuration(totalTimeInMillis),
-                lastTimeStamp = stats.lastTimeStamp,
-                firstTimeStamp = stats.firstTimeStamp,
+                timeRange = timeRange,
                 totalTimeInMillis = totalTimeInMillis
             )
         } catch (e: PackageManager.NameNotFoundException) {
             println("Package not found: ${stats.packageName}")
             null
         }
-    }
-
-    private fun logAppUsageDetails(stats: UsageStats, appName: String, totalTimeInMillis: Long) {
-        println("\n=== $appName (${stats.packageName}) ===")
-        println("Time Metrics:")
-        println("Foreground Time: ${formatDuration(stats.totalTimeInForeground)}")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            println("Visible Time: ${formatDuration(stats.totalTimeVisible)}")
-        }
-        println("Selected Time: ${formatDuration(totalTimeInMillis)}")
-        println("Usage Period: ${formatDateTime(stats.firstTimeStamp)} to ${formatDateTime(stats.lastTimeStamp)}")
-    }
-
-    private fun formatDateTime(timestamp: Long): String {
-        return SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date(timestamp))
     }
 
     private fun formatDuration(millis: Long): String {
