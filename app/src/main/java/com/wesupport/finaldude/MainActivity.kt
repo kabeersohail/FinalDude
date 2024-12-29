@@ -119,7 +119,7 @@ class MainActivity : AppCompatActivity() {
 
         // Update the RecyclerView with formatted data
         screenTimeData.clear()
-        screenTimeData.addAll(formatUsageStats(usageStats, startTime, endTime))
+        screenTimeData.addAll(formatUsageStats(usageStats))
         adapter.notifyDataSetChanged()
     }
 
@@ -147,20 +147,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun formatUsageStats(
-        usageStats: List<UsageStats>,
-        requestedStartTime: Long,
-        requestedEndTime: Long
+        usageStats: List<UsageStats>
     ): List<AppScreenTime> {
         val packageManager = packageManager
-
-//        // Filter out usage stats that do not fit within the requested time range
-//        val filteredStats = usageStats.filter { stats ->
-//            val statsStartTime = stats.firstTimeStamp
-//            val statsEndTime = stats.lastTimeStamp
-//
-//            // Only keep the intervals within the requested time range
-//            statsStartTime >= requestedStartTime && statsEndTime <= requestedEndTime
-//        }
 
         // Log the filtered stats and their time ranges for debugging
         usageStats.map {
@@ -169,7 +158,7 @@ class MainActivity : AppCompatActivity() {
             val firstFormatted = timeFormat.format(Date(it.firstTimeStamp))
 
             // Format the last timestamp to only include the time
-            val timeOnlyFormat = SimpleDateFormat("hh:mm:ss a", Locale.getDefault()) // Only time for the end timestamp
+            val timeOnlyFormat = SimpleDateFormat("dd MMM hh:mm:ss a", Locale.getDefault()) // Only time for the end timestamp
             val lastFormatted = timeOnlyFormat.format(Date(it.lastTimeStamp))
 
             // Calculate the duration

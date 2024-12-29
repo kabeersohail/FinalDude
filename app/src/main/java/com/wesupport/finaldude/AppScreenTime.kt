@@ -16,12 +16,6 @@ data class AppScreenTime(
     val firstTimeStamp: Long // Add this field
 )
 
-data class UsageGroup(
-    val startTimestamp: String,
-    val endTimestamp: String,
-    val apps: List<String>
-)
-
 
 class ScreenTimeAdapter(private val screenTimeData: List<AppScreenTime>) : RecyclerView.Adapter<ScreenTimeAdapter.ScreenTimeViewHolder>() {
 
