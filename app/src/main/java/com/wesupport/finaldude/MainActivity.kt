@@ -85,7 +85,7 @@ class MainActivity : AppCompatActivity() {
         val formattedDate = dateFormatter.format(calendar.time)
         findViewById<TextView>(R.id.tvSelectedDate).text = formattedDate
 
-        // Define start and end time for the selected day
+        // Define start time (midnight of the selected day)
         val startTime = Calendar.getInstance().apply {
             timeInMillis = calendar.timeInMillis
             set(Calendar.HOUR_OF_DAY, 0)
@@ -94,23 +94,32 @@ class MainActivity : AppCompatActivity() {
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
 
-        val endTime = Calendar.getInstance().apply {
-            timeInMillis = calendar.timeInMillis
-            add(Calendar.DAY_OF_YEAR, 1)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
+        // Define end time based on whether the selected date is today or a past day
+        val endTime = if (calendar.get(Calendar.DAY_OF_YEAR) == Calendar.getInstance().get(Calendar.DAY_OF_YEAR)) {
+            System.currentTimeMillis()  // For today, use current time
+        } else {
+            // For past days, use the end of that day (23:59:59)
+            val endOfDay = Calendar.getInstance().apply {
+                timeInMillis = calendar.timeInMillis
+                set(Calendar.HOUR_OF_DAY, 23)
+                set(Calendar.MINUTE, 59)
+                set(Calendar.SECOND, 59)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            endOfDay
+        }
 
-        println("Start Time: $startTime, End Time: $endTime") // Debugging log
+        // Debugging log for the requested time range
+        val requestedStartTime = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(startTime))
+        val requestedEndTime = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(endTime))
+        println(" %&^%&^% Requested Time Range: startTimestamp: $requestedStartTime, endTimestamp: $requestedEndTime")
 
         // Fetch usage stats for the defined time range
         val usageStats = getUsageStats(this, startTime, endTime)
 
         // Update the RecyclerView with formatted data
         screenTimeData.clear()
-        screenTimeData.addAll(formatUsageStats(usageStats))
+        screenTimeData.addAll(formatUsageStats(usageStats, startTime, endTime))
         adapter.notifyDataSetChanged()
     }
 
@@ -137,38 +146,49 @@ class MainActivity : AppCompatActivity() {
             .filter { it.totalTimeInForeground > 0 } // Filter apps with non-zero usage time
     }
 
-    private fun formatUsageStats(usageStats: List<UsageStats>): List<AppScreenTime> {
+    private fun formatUsageStats(
+        usageStats: List<UsageStats>,
+        requestedStartTime: Long,
+        requestedEndTime: Long
+    ): List<AppScreenTime> {
         val packageManager = packageManager
 
-        // Log the requested time range for debugging purposes
-        val requestedStartTime = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(calendar.timeInMillis))
-        val requestedEndTime = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(calendar.timeInMillis + (1000 * 60 * 60 * 24))) // +24 hours
-        println(" %&^%&^% Requested Time Range: startTimestamp: $requestedStartTime, endTimestamp: $requestedEndTime")
+//        // Filter out usage stats that do not fit within the requested time range
+//        val filteredStats = usageStats.filter { stats ->
+//            val statsStartTime = stats.firstTimeStamp
+//            val statsEndTime = stats.lastTimeStamp
+//
+//            // Only keep the intervals within the requested time range
+//            statsStartTime >= requestedStartTime && statsEndTime <= requestedEndTime
+//        }
 
-        // Log the actual usage stats' time range (after query) and remove duplicates based on start and end timestamps
+        // Log the filtered stats and their time ranges for debugging
         usageStats.map {
-            val firstFormatted = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(it.firstTimeStamp))
-            val lastFormatted = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(it.lastTimeStamp))
+            // Format the first timestamp to include the day and the time
+            val timeFormat = SimpleDateFormat("dd MMM hh:mm:ss a", Locale.getDefault()) // Updated format to include time
+            val firstFormatted = timeFormat.format(Date(it.firstTimeStamp))
 
-            // Calculate the duration in milliseconds
+            // Format the last timestamp to only include the time
+            val timeOnlyFormat = SimpleDateFormat("hh:mm:ss a", Locale.getDefault()) // Only time for the end timestamp
+            val lastFormatted = timeOnlyFormat.format(Date(it.lastTimeStamp))
+
+            // Calculate the duration
             val durationMillis = it.lastTimeStamp - it.firstTimeStamp
-
-            // Convert duration to hours, minutes, and seconds
             val hours = durationMillis / (1000 * 60 * 60)
             val minutes = (durationMillis / (1000 * 60)) % 60
             val seconds = (durationMillis / 1000) % 60
             val durationFormatted = String.format("%02dh %02dm %02ds", hours, minutes, seconds)
 
-            // Return formatted bucket details with start, end, and duration
-            "$firstFormatted - $lastFormatted | Duration: $durationFormatted"
-        }
-            .distinct() // Remove duplicates based on the entire formatted string
+            // Log the output in the desired format (start date+time once, end time only)
+            " %&^%&^% $firstFormatted to $lastFormatted | Duration: $durationFormatted"
+        }.distinct() // Remove duplicates based on the entire formatted string
             .forEach {
                 println(" %&^%&^% $it")
             }
 
-        // Return formatted AppScreenTime objects (without duplicates)
+        // Return formatted AppScreenTime objects sorted by total time in foreground
         return usageStats
+            .distinctBy { it.packageName } // Ensure we only return unique entries based on the app's package name
             .sortedByDescending { it.totalTimeInForeground }
             .map { stats ->
                 val appName = try {
@@ -178,6 +198,7 @@ class MainActivity : AppCompatActivity() {
                     stats.packageName // Fallback to package name if app name is not found
                 }
 
+                // Calculate the time in hours, minutes, seconds
                 val totalTimeInMillis = stats.totalTimeInForeground
                 val hours = totalTimeInMillis / (1000 * 60 * 60)
                 val minutes = (totalTimeInMillis / (1000 * 60)) % 60
@@ -187,7 +208,7 @@ class MainActivity : AppCompatActivity() {
                 val lastTimeStamp = stats.lastTimeStamp
                 val firstTimeStamp = stats.firstTimeStamp
 
-                // Create and return the AppScreenTime object with the additional fields
+                // Create and return the AppScreenTime object
                 AppScreenTime(
                     appName = appName,
                     screenTime = String.format("%02dh %02dm %02ds", hours, minutes, seconds),
@@ -196,8 +217,6 @@ class MainActivity : AppCompatActivity() {
                 )
             }
     }
-
-
 
 
 }
