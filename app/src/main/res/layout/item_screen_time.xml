@@ -32,6 +32,16 @@
         android:textColor="@android:color/black"
         android:textSize="14sp" />
 
+    <!-- First Used with 12.5% of the available space -->
+    <TextView
+        android:id="@+id/tvFirstUsed"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="0.125"
+        android:text="First Used: "
+        android:textColor="@android:color/darker_gray"
+        android:textSize="12sp" />
+
     <TextView
         android:id="@+id/tvLastUsed"
         android:layout_width="0dp"
@@ -42,13 +52,4 @@
         android:textColor="@android:color/darker_gray"
         android:textSize="12sp" />
 
-    <!-- First Used with 12.5% of the available space -->
-    <TextView
-        android:id="@+id/tvFirstUsed"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="0.125"
-        android:text="First Used: "
-        android:textColor="@android:color/darker_gray"
-        android:textSize="12sp" />
 </LinearLayout>
