@@ -166,23 +166,23 @@ class MainActivity : AppCompatActivity() {
         startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
     }
 
-    private fun getUsageStats(context: Context, startTime: Long, endTime: Long): List<UsageStats> {
+    private fun getUsageStats(context: Context, startTime: Long, endTime: Long): Map<String, UsageStats> {
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        return usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_BEST, startTime, endTime)
+        return usageStatsManager.queryAndAggregateUsageStats(startTime, endTime)
             .filter { stats ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    stats.totalTimeVisible > 0 || stats.totalTimeInForeground > 0
+                    stats.value.totalTimeVisible > 0 || stats.value.totalTimeInForeground > 0
                 } else {
-                    stats.totalTimeInForeground > 0
+                    stats.value.totalTimeInForeground > 0
                 }
             }
     }
 
-    private fun formatUsageStats(usageStats: List<UsageStats>): List<AppScreenTimeGroup> {
+    private fun formatUsageStats(usageStats: Map<String, UsageStats>): List<AppScreenTimeGroup> {
         // First, get distinct time ranges
         val timeRanges = usageStats
             .map { stats ->
-                TimeRange(stats.firstTimeStamp, stats.lastTimeStamp)
+                TimeRange(stats.value.firstTimeStamp, stats.value.lastTimeStamp)
             }
             .distinct()
 
@@ -190,9 +190,9 @@ class MainActivity : AppCompatActivity() {
         return timeRanges.map { timeRange ->
             val appsInRange = usageStats
                 .filter { stats ->
-                    TimeRange(stats.firstTimeStamp, stats.lastTimeStamp) == timeRange
+                    TimeRange(stats.value.firstTimeStamp, stats.value.lastTimeStamp) == timeRange
                 }
-                .distinctBy { it.packageName }
+                .values.distinctBy { it }
                 .mapNotNull { stats -> createAppScreenTime(stats, timeRange) }
                 .sortedByDescending { it.totalTimeInMillis }
 
