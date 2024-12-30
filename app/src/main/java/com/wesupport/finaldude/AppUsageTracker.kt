@@ -66,11 +66,7 @@ class AppUsageTracker(private val context: Context) {
                 }
 
                 if (totalTime > 0) {
-                    // Convert to minutes and round
-                    val minutes = TimeUnit.MILLISECONDS.toMinutes(totalTime)
-                    if (minutes > 0) {
-                        usageMap[packageName] = TimeUnit.MINUTES.toMillis(minutes)
-                    }
+                    usageMap[packageName] = totalTime
                 }
             }
         } catch (e: Exception) {

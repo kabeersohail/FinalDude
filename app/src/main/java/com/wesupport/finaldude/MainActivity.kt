@@ -7,92 +7,102 @@ import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.widget.Button
+import android.widget.ImageButton
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import java.util.concurrent.TimeUnit
 import java.util.Calendar
 import java.util.TimeZone
 
 class MainActivity : AppCompatActivity() {
+    private lateinit var dateText: TextView
+    private lateinit var prevButton: ImageButton
+    private lateinit var nextButton: ImageButton
+    private var currentDate: Calendar = Calendar.getInstance()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
         if (!hasUsageStatsPermission()) {
             Log.d("AppUsage", "No usage stats permission - requesting now")
             requestUsageStatsPermission()
             return
         }
 
-        val button: Button = findViewById(R.id.click_me)
+        dateText = findViewById(R.id.dateText)
+        prevButton = findViewById(R.id.prevButton)
+        nextButton = findViewById(R.id.nextButton)
 
-        button.setOnClickListener {
-            val calendar = Calendar.getInstance(TimeZone.getDefault()).apply {
-                timeInMillis = System.currentTimeMillis()
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
+        // Set up click listeners
+        prevButton.setOnClickListener {
+            currentDate.add(Calendar.DAY_OF_YEAR, -1)
+            updateUsageStats()
+        }
 
-            val startTime = calendar.timeInMillis
-            val endTime = System.currentTimeMillis()
+        nextButton.setOnClickListener {
+            currentDate.add(Calendar.DAY_OF_YEAR, 1)
+            updateUsageStats()
+        }
 
-            try {
-                val tracker = AppUsageTracker(this)
-                val usageStats = tracker.getForegroundUsageStats(startTime, endTime)
+        // Initial load
+        updateUsageStats()
+    }
 
-                // Combine Settings and Digital Wellbeing usage
-                val settingsTime = (usageStats["com.android.settings"] ?: 0L) +
-                        (usageStats["com.google.android.apps.wellbeing"] ?: 0L)
+    private fun updateUsageStats() {
+        // Set start time to midnight of current selected date
+        val startCal = currentDate.clone() as Calendar
+        startCal.set(Calendar.HOUR_OF_DAY, 0)
+        startCal.set(Calendar.MINUTE, 0)
+        startCal.set(Calendar.SECOND, 0)
+        startCal.set(Calendar.MILLISECOND, 0)
+        val startTime = startCal.timeInMillis
 
-                val combinedStats = usageStats.toMutableMap().apply {
-                    remove("com.android.settings")
-                    remove("com.google.android.apps.wellbeing")
-                    if (settingsTime > 0) {
-                        put("com.android.settings", settingsTime)
-                    }
-                }
+        // Set end time to midnight of next day or current time if today
+        val endCal = startCal.clone() as Calendar
+        endCal.add(Calendar.DAY_OF_YEAR, 1)
+        val now = System.currentTimeMillis()
+        val endTime = if (endCal.timeInMillis > now) now else endCal.timeInMillis
 
-                if (combinedStats.isEmpty()) {
-                    Log.d("AppUsage", "No usage data found for today")
-                } else {
-                    Log.d("AppUsage", "=== Today's App Usage (${formatDate(startTime)}) ===")
-                    combinedStats.toList()
-                        .sortedByDescending { it.second }
-                        .forEach { (packageName, duration) ->
-                            val minutes = TimeUnit.MILLISECONDS.toMinutes(duration)
-                            if (minutes > 0) {
-                                val appName = when (packageName) {
-                                    "com.android.settings" -> "Settings"
-                                    "com.wesupport.finaldude" -> "FinalDude"
-                                    else -> try {
-                                        packageManager.getApplicationLabel(
-                                            packageManager.getApplicationInfo(packageName, 0)
-                                        ).toString()
-                                    } catch (e: Exception) {
-                                        packageName
-                                    }
-                                }
-                                Log.d("AppUsage", "$appName: $minutes min")
+        // Update date display
+        dateText.text = formatDate(startTime)
 
-                                // Debug raw time
-                                Log.d("AppUsageTracker", "Raw time for $appName: $minutes minutes")
+        try {
+            val tracker = AppUsageTracker(this)
+            val usageStats = tracker.getForegroundUsageStats(startTime, endTime)
+
+            if (usageStats.isEmpty()) {
+                Log.d("AppUsage", "No usage data found for ${formatDate(startTime)}")
+            } else {
+                Log.d("AppUsage", "=== App Usage for ${formatDate(startTime)} ===")
+                usageStats.toList()
+                    .sortedByDescending { it.second }
+                    .forEach { (packageName, duration) ->
+                        val minutes = TimeUnit.MILLISECONDS.toMinutes(duration)
+                        if (minutes > 0) {
+                            val appName = try {
+                                packageManager.getApplicationLabel(
+                                    packageManager.getApplicationInfo(packageName, 0)
+                                ).toString()
+                            } catch (e: Exception) {
+                                packageName
                             }
+                            val hours = TimeUnit.MILLISECONDS.toHours(duration)
+                            val mins = TimeUnit.MILLISECONDS.toMinutes(duration) % 60
+                            val secs = TimeUnit.MILLISECONDS.toSeconds(duration) % 60
+                            val timeStr = String.format("%02d:%02d:%02d", hours, mins, secs)
+                            Log.d("AppUsage", "$appName: $timeStr")
                         }
-                }
-            } catch (e: Exception) {
-                Log.e("AppUsage", "Error getting usage stats", e)
-                e.printStackTrace()
+                    }
             }
+        } catch (e: Exception) {
+            Log.e("AppUsage", "Error getting usage stats", e)
+            e.printStackTrace()
         }
     }
 
-    private fun formatTime(timeMillis: Long): String {
-        return java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
-            .format(java.util.Date(timeMillis))
-    }
-
     private fun formatDate(timeMillis: Long): String {
-        return java.text.SimpleDateFormat("MMM dd", java.util.Locale.getDefault())
+        return java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
             .format(java.util.Date(timeMillis))
     }
 
