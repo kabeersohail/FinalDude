@@ -16,7 +16,6 @@ class AppUsageTracker(private val context: Context) {
         val usageMap = mutableMapOf<String, Long>()
 
         try {
-            // Store all events in chronological order
             val eventsByApp = TreeMap<String, MutableList<Event>>()
             val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
             val event = UsageEvents.Event()
@@ -28,45 +27,52 @@ class AppUsageTracker(private val context: Context) {
 
                 if (timestamp in startTime..endTime) {
                     val events = eventsByApp.getOrPut(packageName) { mutableListOf() }
-                    events.add(Event(timestamp, event.eventType == UsageEvents.Event.ACTIVITY_RESUMED))
+                    when (event.eventType) {
+                        UsageEvents.Event.ACTIVITY_RESUMED,
+                        UsageEvents.Event.ACTIVITY_PAUSED -> {
+                            events.add(Event(timestamp, event.eventType == UsageEvents.Event.ACTIVITY_RESUMED))
+                        }
+                    }
                 }
             }
 
-            // Process events chronologically for each app
             eventsByApp.forEach { (packageName, events) ->
                 events.sortBy { it.timestamp }
-                var lastResumeTime: Long? = null
                 var totalTime = 0L
+                var lastResumeTime: Long? = null
 
                 for (event in events) {
                     if (event.isResume) {
                         if (lastResumeTime == null) {
                             lastResumeTime = event.timestamp
                         }
-                    } else { // PAUSE event
-                        if (lastResumeTime != null) {
-                            totalTime += event.timestamp - lastResumeTime
+                    } else {
+                        lastResumeTime?.let { resumeTime ->
+                            val sessionTime = event.timestamp - resumeTime
+                            if (sessionTime > 0) {
+                                totalTime += sessionTime
+                            }
                             lastResumeTime = null
                         }
                     }
                 }
 
-                // Handle still running apps
+                // Handle still active sessions
                 lastResumeTime?.let { resumeTime ->
-                    totalTime += endTime - resumeTime
+                    val sessionTime = endTime - resumeTime
+                    if (sessionTime > 0) {
+                        totalTime += sessionTime
+                    }
                 }
 
                 if (totalTime > 0) {
-                    usageMap[packageName] = totalTime
+                    // Convert to minutes and round
+                    val minutes = TimeUnit.MILLISECONDS.toMinutes(totalTime)
+                    if (minutes > 0) {
+                        usageMap[packageName] = TimeUnit.MINUTES.toMillis(minutes)
+                    }
                 }
             }
-
-            // Log processing details
-            Log.d("AppUsageTracker", "Total apps tracked: ${eventsByApp.size}")
-            eventsByApp.forEach { (pkg, events) ->
-                Log.d("AppUsageTracker", "$pkg: ${events.size} events")
-            }
-
         } catch (e: Exception) {
             Log.e("AppUsageTracker", "Error getting usage stats", e)
         }
