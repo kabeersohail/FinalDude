@@ -1,3 +1,4 @@
+// AppUsageAdapter.kt
 package com.wesupport.finaldude
 
 import android.view.LayoutInflater
@@ -7,31 +8,30 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import java.util.concurrent.TimeUnit
 
-class AppUsageAdapter : RecyclerView.Adapter<AppUsageAdapter.UsageViewHolder>() {
-    
+class AppUsageAdapter : RecyclerView.Adapter<AppUsageAdapter.ViewHolder>() {
     private var usageList: List<UsageData> = emptyList()
 
-    fun setData(newData: List<UsageData>) {
-        usageList = newData
+    fun setData(newList: List<UsageData>) {
+        usageList = newList
         notifyDataSetChanged()
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): UsageViewHolder {
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.item_app_usage, parent, false)
-        return UsageViewHolder(view)
+        return ViewHolder(view)
     }
 
-    override fun onBindViewHolder(holder: UsageViewHolder, position: Int) {
+    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val usage = usageList[position]
         holder.bind(usage)
     }
 
-    override fun getItemCount() = usageList.size
+    override fun getItemCount(): Int = usageList.size
 
-    class UsageViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        private val appNameText: TextView = itemView.findViewById(R.id.appNameText)
-        private val usageTimeText: TextView = itemView.findViewById(R.id.usageTimeText)
+    class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        private val appNameText: TextView = view.findViewById(R.id.appNameText)
+        private val usageTimeText: TextView = view.findViewById(R.id.usageTimeText)
 
         fun bind(usage: UsageData) {
             appNameText.text = usage.appName

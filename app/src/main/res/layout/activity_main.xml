@@ -35,7 +35,6 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/baseline_arrow_right_24"
             android:contentDescription="Next day" />
-
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView

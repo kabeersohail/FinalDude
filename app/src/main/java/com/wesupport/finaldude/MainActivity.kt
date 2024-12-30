@@ -1,3 +1,4 @@
+// MainActivity.kt
 package com.wesupport.finaldude
 
 import android.app.AppOpsManager
@@ -11,9 +12,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import java.util.concurrent.TimeUnit
 import java.util.Calendar
-import java.util.TimeZone
 
 class MainActivity : AppCompatActivity() {
     private lateinit var dateText: TextView
@@ -74,11 +73,24 @@ class MainActivity : AppCompatActivity() {
         dateText.text = formatDate(startTime)
 
         try {
+            // Log all installed packages first
+            val installedApps = packageManager.getInstalledApplications(0)
+            Log.d("AppUsage", "Total installed apps: ${installedApps.size}")
+            installedApps.forEach { appInfo ->
+                Log.d("AppUsage", "Installed app: ${appInfo.packageName}")
+            }
+
             val tracker = AppUsageTracker(this)
             val usageStats = tracker.getForegroundUsageStats(startTime, endTime)
 
+            // Log all apps from usage stats
+            Log.d("AppUsage", "Apps with usage data: ${usageStats.size}")
+            usageStats.forEach { (packageName, duration) ->
+                Log.d("AppUsage", "Usage - Package: $packageName, Duration: $duration")
+            }
+
             val usageList = usageStats
-                .filter { it.value > 0 }
+                // Removed the filter to show all apps
                 .map { (packageName, duration) ->
                     val appName = try {
                         packageManager.getApplicationLabel(
@@ -90,6 +102,12 @@ class MainActivity : AppCompatActivity() {
                     UsageData(appName, packageName, duration)
                 }
                 .sortedByDescending { it.duration }
+
+            // Log final displayed apps
+            Log.d("AppUsage", "Final displayed apps: ${usageList.size}")
+            usageList.forEach { usage ->
+                Log.d("AppUsage", "Displayed - App: ${usage.appName}, Package: ${usage.packageName}, Duration: ${usage.duration}")
+            }
 
             adapter.setData(usageList)
 

@@ -1,10 +1,10 @@
+// AppUsageTracker.kt
 package com.wesupport.finaldude
 
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.util.Log
-import java.util.concurrent.TimeUnit
 import java.util.TreeMap
 
 class AppUsageTracker(private val context: Context) {
@@ -14,14 +14,19 @@ class AppUsageTracker(private val context: Context) {
 
     fun getForegroundUsageStats(startTime: Long, endTime: Long): Map<String, Long> {
         val usageMap = mutableMapOf<String, Long>()
-
         try {
             val eventsByApp = TreeMap<String, MutableList<Event>>()
             val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
+
+            // Log all events for debugging
             val event = UsageEvents.Event()
+            var eventCount = 0
 
             while (usageEvents.hasNextEvent()) {
                 usageEvents.getNextEvent(event)
+                eventCount++
+                Log.v("AppUsage", "Event: ${event.packageName}, Type: ${event.eventType}, Time: ${event.timeStamp}")
+
                 val timestamp = event.timeStamp
                 val packageName = event.packageName
 
@@ -35,6 +40,7 @@ class AppUsageTracker(private val context: Context) {
                     }
                 }
             }
+            Log.d("AppUsage", "Total events processed: $eventCount")
 
             eventsByApp.forEach { (packageName, events) ->
                 events.sortBy { it.timestamp }
@@ -65,14 +71,14 @@ class AppUsageTracker(private val context: Context) {
                     }
                 }
 
-                if (totalTime > 0) {
-                    usageMap[packageName] = totalTime
-                }
+                // Include all apps in the map, even those with zero time
+                usageMap[packageName] = totalTime
             }
+
         } catch (e: Exception) {
             Log.e("AppUsageTracker", "Error getting usage stats", e)
+            e.printStackTrace()
         }
-
         return usageMap
     }
 
