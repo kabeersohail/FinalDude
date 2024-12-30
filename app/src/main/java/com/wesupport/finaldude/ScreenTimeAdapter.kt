@@ -61,9 +61,26 @@ class ScreenTimeAdapter(private var screenTimeGroups: List<AppScreenTimeGroup>) 
         private val timeRangeTextView: TextView = itemView.findViewById(R.id.tvTimeRange)
 
         fun bind(timeRange: TimeRange) {
-            timeRangeTextView.text = timeRange.formatRange()
+
+            val durationMillis = timeRange.endTime - timeRange.startTime
+            val formattedDuration = formatDuration(durationMillis)
+            timeRangeTextView.text = timeRange.formatRange()  + " Duration: $formattedDuration"
         }
+
+        private fun formatDuration(millis: Long): String {
+            val seconds = millis / 1000
+            val minutes = seconds / 60
+            val hours = minutes / 60
+
+            return when {
+                hours > 0 -> "${hours}h ${minutes % 60}m"
+                minutes > 0 -> "${minutes}m ${seconds % 60}s"
+                else -> "${seconds}s"
+            }
+        }
+
     }
+
 
     class ScreenTimeViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val appNameTextView: TextView = itemView.findViewById(R.id.tvAppName)
