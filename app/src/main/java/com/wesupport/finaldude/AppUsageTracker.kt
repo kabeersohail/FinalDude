@@ -5,6 +5,7 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.util.Log
 import java.util.concurrent.TimeUnit
+import java.util.TreeMap
 
 class AppUsageTracker(private val context: Context) {
     private val usageStatsManager: UsageStatsManager by lazy {
@@ -15,51 +16,56 @@ class AppUsageTracker(private val context: Context) {
         val usageMap = mutableMapOf<String, Long>()
 
         try {
+            // Store all events in chronological order
+            val eventsByApp = TreeMap<String, MutableList<Event>>()
             val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
             val event = UsageEvents.Event()
-            val lastResumeTime = mutableMapOf<String, Long>()
-
-            var lastTimeStamp = 0L
 
             while (usageEvents.hasNextEvent()) {
                 usageEvents.getNextEvent(event)
-                lastTimeStamp = event.timeStamp
+                val timestamp = event.timeStamp
+                val packageName = event.packageName
 
-                // Only process events within our time window
-                if (event.timeStamp < startTime) {
-                    continue
+                if (timestamp in startTime..endTime) {
+                    val events = eventsByApp.getOrPut(packageName) { mutableListOf() }
+                    events.add(Event(timestamp, event.eventType == UsageEvents.Event.ACTIVITY_RESUMED))
                 }
+            }
 
-                when (event.eventType) {
-                    UsageEvents.Event.ACTIVITY_RESUMED -> {
-                        lastResumeTime[event.packageName] = event.timeStamp
-                    }
-                    UsageEvents.Event.ACTIVITY_PAUSED -> {
-                        val resumeTime = lastResumeTime[event.packageName]
-                        if (resumeTime != null && resumeTime >= startTime) {
-                            val duration = event.timeStamp - resumeTime
-                            if (duration > 0) {
-                                usageMap[event.packageName] = (usageMap[event.packageName] ?: 0) + duration
-                            }
+            // Process events chronologically for each app
+            eventsByApp.forEach { (packageName, events) ->
+                events.sortBy { it.timestamp }
+                var lastResumeTime: Long? = null
+                var totalTime = 0L
+
+                for (event in events) {
+                    if (event.isResume) {
+                        if (lastResumeTime == null) {
+                            lastResumeTime = event.timestamp
                         }
-                        lastResumeTime.remove(event.packageName)
+                    } else { // PAUSE event
+                        if (lastResumeTime != null) {
+                            totalTime += event.timestamp - lastResumeTime
+                            lastResumeTime = null
+                        }
                     }
+                }
+
+                // Handle still running apps
+                lastResumeTime?.let { resumeTime ->
+                    totalTime += endTime - resumeTime
+                }
+
+                if (totalTime > 0) {
+                    usageMap[packageName] = totalTime
                 }
             }
 
-            // For apps still in foreground
-            val currentTime = System.currentTimeMillis().coerceAtMost(endTime)
-            lastResumeTime.forEach { (packageName, resumeTime) ->
-                if (resumeTime >= startTime) {
-                    val duration = currentTime - resumeTime
-                    if (duration > 0) {
-                        usageMap[packageName] = (usageMap[packageName] ?: 0) + duration
-                    }
-                }
+            // Log processing details
+            Log.d("AppUsageTracker", "Total apps tracked: ${eventsByApp.size}")
+            eventsByApp.forEach { (pkg, events) ->
+                Log.d("AppUsageTracker", "$pkg: ${events.size} events")
             }
-
-            // Log the actual time range we processed
-            Log.d("AppUsageTracker", "Processed events from ${formatTime(startTime)} to ${formatTime(lastTimeStamp)}")
 
         } catch (e: Exception) {
             Log.e("AppUsageTracker", "Error getting usage stats", e)
@@ -68,8 +74,5 @@ class AppUsageTracker(private val context: Context) {
         return usageMap
     }
 
-    private fun formatTime(timeMillis: Long): String {
-        return java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.getDefault())
-            .format(java.util.Date(timeMillis))
-    }
+    private data class Event(val timestamp: Long, val isResume: Boolean)
 }

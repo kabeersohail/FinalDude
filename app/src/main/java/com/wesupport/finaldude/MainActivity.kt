@@ -33,11 +33,14 @@ class MainActivity : AppCompatActivity() {
         val startTime = calendar.timeInMillis
         val endTime = System.currentTimeMillis()
 
-        Log.d("AppUsage", "Getting stats from ${formatTime(startTime)} to ${formatTime(endTime)}")
-
         try {
             val tracker = AppUsageTracker(this)
             val usageStats = tracker.getForegroundUsageStats(startTime, endTime)
+
+            // Debug log for raw times
+            usageStats.forEach { (pkg, time) ->
+                Log.d("AppUsageTracker", "Raw time for $pkg: ${TimeUnit.MILLISECONDS.toMinutes(time)} minutes")
+            }
 
             if (usageStats.isEmpty()) {
                 Log.d("AppUsage", "No usage data found for today")
